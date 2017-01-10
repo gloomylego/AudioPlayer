@@ -439,8 +439,8 @@ public class AudioPlayer: NSObject {
                     default:
                         return currentItem.lowestQualityURL
                     }
-                    }()
-
+                }()
+                
                 if reachability.isReachable() || URLInfo.URL.isOfflineURL {
                     state = .Buffering
                     beginBackgroundTask()
@@ -679,14 +679,16 @@ public class AudioPlayer: NSObject {
     Resume the player.
     */
     public func resume() {
-        //We ensure the rate is correctly set
-        player?.rate = rate
-
-        //We don't wan't to change the state to Playing in case it's Buffering. That
-        //would be a lie.
-        if state != .Playing && state != .Buffering {
+        if ( !reachability.isReachable() ) {
+            state = .WaitingForConnection
+        } else if state != .Playing && state != .Buffering {
+            //We don't wan't to change the state to Playing in case it's Buffering. That
+            //would be a lie.
             state = .Playing
         }
+        
+        //We ensure the rate is correctly set
+        player?.rate = rate
 
         //In case we don't have a retry timer, let's start one.
         //This ensures that the player will eventually restart at some point if the connection
@@ -717,24 +719,36 @@ public class AudioPlayer: NSObject {
         //app is in foreground.
         beginBackgroundTask()
     }
-
+    
+    public func flushCurrentItem() {
+        currentItem = nil
+    }
+    
     /**
-    Stops the player and clear the queue.
+    Stops the player and clears the queue.
     */
     public func stop() {
         //Stopping player immediately
-        player?.rate = 0
-
-        state = .Stopped
+        stopAndKeepCurrentItem()
         
-        retryTimer?.invalidate()
-        retryTimer = nil
-
         enqueuedItems = nil
         currentItem = nil
         player = nil
     }
-
+    
+    /**
+     Stops the player and clears the queue but keeps current audio item.
+     Current item is kept to display audio item's metadata (for now playing info center)
+     */
+    private func stopAndKeepCurrentItem() {
+        player?.rate = 0
+        
+        state = .Stopped
+        
+        retryTimer?.invalidate()
+        retryTimer = nil
+    }
+    
     /**
     Plays next item in the queue.
     */
@@ -1099,17 +1113,26 @@ public class AudioPlayer: NSObject {
     }
 
     @objc private func reachabilityStatusChanged(note: NSNotification) {
-        if state == .WaitingForConnection {
+        switch state {
+        case .WaitingForConnection:
             if let connectionLossDate = connectionLossDate where reachability.isReachable() {
                 if let stateWhenConnectionLost = stateWhenConnectionLost where stateWhenConnectionLost != .Stopped {
                     if fabs(connectionLossDate.timeIntervalSinceNow) < maximumConnectionLossTime {
                         retryOrPlayNext()
                     }
-                }
+                } else { stop() }
                 self.connectionLossDate = nil
-            }
-        }
-        else if state != .Stopped && state != .Paused {
+            } else { stop() }
+        case .Stopped: break
+        case .Paused:
+            /*
+                bug found in 0.9.1 : if internet connection goes offline when state is .Paused
+                                     then there would be no sound when state is chenged to .Playing
+                hotfix:
+                        stop player ( without deleting audio item's metadata)
+            */
+            stopAndKeepCurrentItem()
+        default:
             if reachability.isReachable() || (currentItem?.soundURLs[currentQuality ?? defaultQuality]?.isOfflineURL ?? false) {
                 retryOrPlayNext()
                 connectionLossDate = nil
@@ -1122,9 +1145,9 @@ public class AudioPlayer: NSObject {
                     if state == .Playing && !qualityIsBeingChanged {
                         interruptionCount++
                     }
-                    state = .WaitingForConnection
                     beginBackgroundTask()
                 }
+                state = .WaitingForConnection
             }
         }
     }
@@ -1265,8 +1288,8 @@ public class AudioPlayer: NSObject {
                         return self.currentItem?.highestQualityURL
                     }
                     return nil
-                    }()
-
+                }()
+                
                 if let URLInfo = URLInfo where URLInfo.quality != currentQuality {
                     let cip = currentItemProgression
                     let item = AVPlayerItem(URL: URLInfo.URL)
