@@ -720,10 +720,6 @@ public class AudioPlayer: NSObject {
         beginBackgroundTask()
     }
     
-    public func flushCurrentItem() {
-        currentItem = nil
-    }
-    
     /**
     Stops the player and clears the queue.
     */
@@ -1127,9 +1123,9 @@ public class AudioPlayer: NSObject {
         case .Paused:
             /*
                 bug found in 0.9.1 : if internet connection goes offline when state is .Paused
-                                     then there would be no sound when state is chenged to .Playing
+                                     then there would be no sound when state is changed to .Playing
                 hotfix:
-                        stop player ( without deleting audio item's metadata)
+                        stop player (without deleting audio item's metadata)
             */
             stopAndKeepCurrentItem()
         default:
