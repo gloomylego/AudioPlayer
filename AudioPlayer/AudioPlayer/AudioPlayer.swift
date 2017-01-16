@@ -679,7 +679,7 @@ public class AudioPlayer: NSObject {
     Resume the player.
     */
     public func resume() {
-        if ( !reachability.isReachable() ) {
+        if ( !reachability.isReachable() && !(currentItem?.soundURLs[currentQuality ?? defaultQuality]?.isOfflineURL ?? false) )  {
             state = .WaitingForConnection
         } else if state != .Playing && state != .Buffering {
             //We don't wan't to change the state to Playing in case it's Buffering. That
